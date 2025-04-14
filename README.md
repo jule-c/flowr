@@ -1,5 +1,5 @@
 # FLOWR: Flow Matching for Structure-Aware De Novo, Interaction- and Fragment-Based Ligand Generation
-![FLOWR Overview](flowr_overview.pdf)
+![FLOWR Overview](FLOWR.png)
 
 FLOWR is a research repository that investigates continuous and discrete flow matching methods applied to structure-based drug discovery. It provides a complete workflow for training models, generating novel ligand molecules, and evaluating the generated structures.
 
