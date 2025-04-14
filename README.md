@@ -49,7 +49,8 @@ For training, generation and evaluation, we provide basic bash and SLURM scripts
 
 ### Data
 Download the SPINDR dataset, the FLOWR checkpoint and generated samples here:
-[Zenodo](https://zenodo.org/uploads/15212510)
+[Zenodo](https://zenodo.org/uploads/15212510).
+
 To train a model, untar the smol_data.tar to get the smol-files. Specify the directory they are placed in the respective scripts (see below).
 We also provide the cif-files for all protein pockets splitted into train, validation and test.
 For running generation only, place the flowr.ckpt path somewhere and specify its location in the `scripts/gen_spindr.sl` script.
