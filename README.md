@@ -79,7 +79,7 @@ sbatch scripts/gen_spindr.sl
 ```
 
 ### Generating Molecules from PDB/CIF
-After training (or with the provided flowr.ckpt), you can generate novel molecules given a PDB or CIF protein file.
+After training (or with the provided flowr.ckpt), you can generate novel molecules given a PDB or CIF protein/pocket file.
 
 If you provide a protein PDB/CIF file, you need to provide a ligand file as well to cut out the pocket (default: 6A cutoff - modify if needed).
 
