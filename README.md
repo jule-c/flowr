@@ -12,6 +12,7 @@ FLOWR is a research repository that investigates continuous and discrete flow ma
   - [Data](#data)
   - [Training the Model](#training-the-model)
   - [Generating Molecules](#generating-molecules)
+  - [Generating Molecules from PDB/CIF](#generating-molecules-from-pdb)
   - [Evaluating Molecules](#evaluating-molecules)
 - [Contributing](#contributing)
 - [License](#license)
@@ -52,9 +53,10 @@ For training, generation and evaluation, we provide basic bash and SLURM scripts
 Download the SPINDR dataset, the FLOWR checkpoint and generated samples here:
 [Zenodo](https://zenodo.org/uploads/15212510).
 
-To train a model, untar the smol_data.tar to get the smol-files. Specify the directory they are placed in the respective scripts (see below).
+To train a model, unzip the smol_data.zip to get the smol-files. Specify the directory they are placed in the respective scripts (see below).
 We also provide the cif-files for all protein pockets splitted into train, validation and test.
-For running generation only, place the flowr.ckpt path somewhere and specify its location in the `scripts/gen_spindr.sl` script.
+
+Generation of novel molecules either de novo or fragment-based can be done with the provided checkpoint (flowr.ckpt).
 
 ### Training the Model
 
@@ -68,12 +70,25 @@ bash scripts/train_spindr.sh
 
 ### Generating Molecules
 
-After training, generate novel molecules using the generation script. This script supports GPU execution and includes options such as sampling steps and noise injection.
+After training (or with the provided flowr.ckpt), generate novel molecules using the provided generation script. 
 
 Modify `scripts/gen_spindr.sl` according to your requirements, then submit the job via SLURM:
 
 ```bash
 sbatch scripts/gen_spindr.sl
+```
+
+### Generating Molecules from PDB/CIF
+After training (or with the provided flowr.ckpt), you can generate novel molecules given a PDB or CIF protein file.
+
+If you provide a protein PDB/CIF file, you need to provide a ligand file as well to cut out the pocket (default: 6A cutoff - modify if needed).
+
+Note, if you want to run conditional generation, you need to provide a ligand file as reference. 
+
+Modify `scripts/gen_pdb.sl` according to your requirements, then submit the job via SLURM:
+
+```bash
+sbatch scripts/gen_pdb.sl
 ```
 
 ### Evaluating Molecules
