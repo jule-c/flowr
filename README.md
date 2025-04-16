@@ -120,13 +120,14 @@ This project is licensed under the [MIT License](LICENSE).
 If you use FLOWR in your research, please cite it as follows:
 
 ```bibtex
-@article{flowr_2025,
-  title={FLOWR – Flow Matching For Structure-Aware De Novo,
-Interaction- and Fragment-Based Ligand Generation},
-  author={Julian Cremer, Ross Irwin et al.},
-  journal={arxiv},
-  year={2025},
-  doi={DOI}
+@misc{cremer2025flowrflowmatchingstructureaware,
+      title={FLOWR: Flow Matching for Structure-Aware De Novo, Interaction- and Fragment-Based Ligand Generation}, 
+      author={Julian Cremer and Ross Irwin and Alessandro Tibot and Jon Paul Janet and Simon Olsson and Djork-Arné Clevert},
+      year={2025},
+      eprint={2504.10564},
+      archivePrefix={arXiv},
+      primaryClass={q-bio.QM},
+      url={https://arxiv.org/abs/2504.10564}, 
 }
 ```
 
