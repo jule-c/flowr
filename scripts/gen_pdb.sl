@@ -78,7 +78,7 @@ python -m flowr.gen.generate_from_pdb \
     --ligand_file "$lig_file" \
     --compute_interactions \
     --compute_interaction_recovery \
-    --protonate_ligands \
+    --protonate_generated_ligands \
     --cut_pocket \
     --pocket_cutoff 6 \
     --gpus "$num_gpus" \
@@ -93,6 +93,7 @@ python -m flowr.gen.generate_from_pdb \
     --categorical_strategy uniform-sample \
     --filter_valid_unique \
     --sample_mol_sizes \
+    # --protonate_pocket \
     # --linker_inpainting \
     # --interaction_inpainting \
     # --func_group_inpainting \
