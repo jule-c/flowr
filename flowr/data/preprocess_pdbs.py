@@ -18,6 +18,7 @@ from rdkit import Chem
 from tqdm import tqdm
 
 from flowr.util.molrepr import GeometricMol
+from openbabel import pybel
 from flowr.util.pocket import (
     PROLIF_INTERACTIONS,
     BindingInteractions,
@@ -200,9 +201,21 @@ def process_complex(
     ligand = None
     if sdf_path is not None:
         if sdf_path.endswith(".sdf"):
-            mol = Chem.SDMolSupplier(str(sdf_path), removeHs=remove_hs)[0]
-            if mol is None:
-                mol = Chem.MolFromMolFile(str(sdf_path), removeHs=remove_hs)
+            try:
+                # Try to read the ligand from SDF file using RDKit
+                mol = Chem.SDMolSupplier(str(sdf_path), removeHs=remove_hs)[0]
+                if mol is None:
+                    mol = Chem.MolFromMolFile(str(sdf_path), removeHs=remove_hs)
+            except Exception:
+                mol_ob = next(pybel.readfile("sdf", sdf_path), None)
+                if mol_ob is None:
+                    print(f"Could not read ligand from {sdf_path} using RDKit nor Open Babel. Skipping.")
+                    return
+                mol_block = mol_ob.write("mol")
+                mol = Chem.MolFromMolBlock(mol_block, removeHs=remove_hs)
+                if mol is None:
+                    print(f"Could not convert ligand to an RDKit molecule from {sdf_path}. Skipping.")
+                    return
         elif sdf_path.endswith(".pdb"):
             mol = Chem.MolFromPDBFile(str(sdf_path), removeHs=remove_hs)
         else:

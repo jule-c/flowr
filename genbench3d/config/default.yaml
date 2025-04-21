@@ -6,7 +6,7 @@ test_set_dir: ./genbench3d_data/test_set/
 pocket_distance_from_ligand: 5.0 # Angstrom
 
 bin:
-  prepare_receptor_bin_path: '/hpfs/userws/cremej01/projects/ADFRsuite/bin/prepare_receptor' # https://ccsb.scripps.edu/adfr/downloads/
+  prepare_receptor_bin_path: './ADFRsuite/bin/prepare_receptor' # https://ccsb.scripps.edu/adfr/downloads/
   glide_path: '/usr/local/shared/schrodinger/current/glide'
   structconvert_path: '/usr/local/shared/schrodinger/current/utilities/structconvert'
 
@@ -14,11 +14,6 @@ data:
   ligboundconf_name: 'LigBoundConf'
   ligboundconf_path: './genbench3d_data/S2_LigBoundConf_minimized.sdf' # https://pubs.acs.org/doi/suppl/10.1021/acs.jcim.0c01197/suppl_file/ci0c01197_si_002.zip
   csd_drug_subset_path: './genbench3d_data/CSD_Drug_Subset.gcd' # https://ars.els-cdn.com/content/image/1-s2.0-S0022354918308104-mmc2.zip
-  crossdocked_path: '/hpfs/projects/mlcs/mlhub/e3moldiffusion/data/crossdocked' # https://drive.google.com/drive/folders/1CzwxmTpjbrt83z_wBzcQncq84OVDPurM
-  crossdocked_full_data_path: '/hpfs/projects/mlcs/mlhub/e3moldiffusion/data/crossdocked/crossdocked_v1.1_rmsd1.0/crossdocked_v1.1_rmsd1.0/' # http://bits.csb.pitt.edu/files/crossdock2020/
-  crossdocked_pocket10_path: '/hpfs/projects/mlcs/mlhub/e3moldiffusion/data/crossdocked/crossdocked_pocket10'
-  crossdocked_splits_pt_path: '/hpfs/projects/mlcs/mlhub/e3moldiffusion/data/crossdocked/split_by_name.pt'
-  crossdocked_splits_p_path: '/hpfs/projects/mlcs/mlhub/e3moldiffusion/data/crossdocked/split_by_name.p'
   minimized_path: './genbench3d_data/paper_reproduce/minimized/'
   test_set_path: './genbench3d_data/test_set/'
 

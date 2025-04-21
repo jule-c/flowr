@@ -439,7 +439,7 @@ def load_data(args, hparams, vocab):
         args.pdb_file,
         sdf_path=args.ligand_file,
         add_bonds_to_protein=True,
-        add_hs_to_protein=False,
+        add_hs_to_protein=args.protonate_pocket,
         pocket_cutoff=args.pocket_cutoff,
         cut_pocket=args.cut_pocket,
         txt_path=args.res_txt_file,
@@ -651,9 +651,7 @@ def evaluate(args):
 
     run_time = time.time() - start
     if num_ligands == 0:
-        raise (
-            f"Reached {args.max_sample_iter} sampling iterations, but could not find any ligands."
-        )
+        raise RuntimeError(f"Reached {args.max_sample_iter} sampling iterations, but could not find any ligands.")
     elif num_ligands < args.sample_n_molecules_per_target:
         print(
             f"FYI: Reached {args.max_sample_iter} sampling iterations, but could only find {num_ligands} ligands."
@@ -702,7 +700,7 @@ def evaluate(args):
     )
 
     # Protonate generated ligands:
-    if args.protonate_ligands:
+    if args.protonate_generated_ligands:
         assert hparams[
             "remove_hs"
         ], "The model outputs protonated ligands, no need for additional protonation."
@@ -747,7 +745,7 @@ def evaluate(args):
     # Save ligands as SDF
     sdf_dir = Path(args.save_dir) / f"samples_{target_name}.sdf"
     write_sdf_file(sdf_dir, all_gen_ligs, name=target_name)
-    if args.protonate_ligands:
+    if args.protonate_generated_ligands:
         sdf_dir = Path(args.save_dir) / f"samples_{target_name}_protonated.sdf"
         write_sdf_file(sdf_dir, all_gen_ligs_hs, name=target_name)
 
@@ -756,7 +754,7 @@ def evaluate(args):
         gen_complexes_dir = Path(args.save_dir) / "gen_complexes_protonated"
         if not gen_complexes_dir.exists():
             gen_complexes_dir.mkdir(parents=True, exist_ok=True)
-        if args.protonate_ligands:
+        if args.protonate_generated_ligands:
             write_ligand_pocket_complex_pdb(
                 all_gen_ligs_hs,
                 all_gen_pdbs,
@@ -788,7 +786,7 @@ def evaluate(args):
             pocket_cutoff=args.pocket_cutoff,
             save_dir=args.save_dir,
             remove_hs=hparams["remove_hs"],
-            protonate_ligands=args.protonate_ligands,
+            protonate_ligands=args.protonate_generated_ligands,
         )
         recovery_rates = []
         tanimoto_sims = []
@@ -818,7 +816,8 @@ def get_args():
     parser.add_argument('--pocket_cutoff', type=float, default=6.0)
     parser.add_argument('--compute_interactions', action='store_true')
     parser.add_argument('--compute_interaction_recovery', action='store_true')
-    parser.add_argument('--protonate_ligands', action='store_true')
+    parser.add_argument('--protonate_pocket', action='store_true')
+    parser.add_argument('--protonate_generated_ligands', action='store_true')
 
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument("--gpus", default=8, type=int)

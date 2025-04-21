@@ -42,6 +42,9 @@ FLOWR is a research repository that investigates continuous and discrete flow ma
    export PYTHONPATH="$PWD"
    ```
 
+4. **Install ADFR**
+   Install the [ADFR suite](https://ccsb.scripps.edu/adfr/downloads/).
+   Adjust the prepare_receptor_bin_path in genbench3d/configs/default.yaml to match the ADFR installation.
 ---
 
 ## Getting Started
@@ -52,6 +55,8 @@ For training, generation and evaluation, we provide basic bash and SLURM scripts
 ### Data
 Download the SPINDR dataset, the FLOWR checkpoint and generated samples here:
 [Zenodo](https://zenodo.org/uploads/15212510).
+
+Download the genbench3d_data.tar and place it untarred in the repo (we will get rid of this dependency in the future).
 
 To train a model, unzip the smol_data.zip to get the smol-files. Specify the directory they are placed in the respective scripts (see below).
 We also provide the cif-files for all protein pockets splitted into train, validation and test.

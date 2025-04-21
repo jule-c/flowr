@@ -30,6 +30,7 @@ ckpt="$ckpt_path/your_ckpt.ckpt"
 
 # POCKET and LIG DATA
 ## code handles .pdb and .cif for pockets/proteins and optionally .sdf and .pdb for ligands (if any, otherwise use --ligand_file None)
+## NOTE: If the protein/pocket is not protonated, but you want to compute interactions, specify --protonate_pocket below
 ## NOTE: If you provide a protein PDB/CIF file, you need to provide a ligand file as well to cut out the pocket (default: 6A cutoff - adjust below if needed).
 ## NOTE: If you want to run conditional generation, you need to provide a ligand file as reference. 
 pdb_id="your_pdb_id"
@@ -48,17 +49,23 @@ noise_inject=""
 # coord_noise_std=0.2
 # noise_inject="_noise-$coord_noise_std"
 
-# N MOLECULES PER TARGET
-n_molecules_per_target=1000
-sample_mol_sizes="_sampled-mol-sizes"
-#sample_mol_sizes="_fixed-mol-size"
-
 # CONDITIONAL GENERATION
+## NOTE: If you want to run conditional generation, you need to provide a ligand file as reference.
+## NOTE: If you want to run conditional generation, comment out --sample-mol-sizes below, as currently only fixed/reference sizes are supported
+## NOTE: With the provided flowr.ckpt you can run any of the following conditional generation tasks below
+## NOTE: If you want to run conditional generation on a pre-specified substructure, you need to specifiy --substructure (list of atom indices or SMILES) and --substructure_inpainting
 conditional_generation=""
 #conditional_generation="_interaction-cond"
 #conditional_generation="_func-group-cond"
 #conditional_generation="_scaffold-cond"
 #conditional_generation="_linker-cond"
+#conditional_generation="_substructure-cond"
+
+
+# N MOLECULES PER TARGET
+n_molecules_per_target=1000
+sample_mol_sizes="_sampled-mol-sizes"
+#sample_mol_sizes="_fixed-mol-size"
 
 # SAVE DIR
 save_dir="$ckpt_path/eval_$conditional_gen$n_molecules_per_target-lig-per-target$sample_mol_sizes$noise_inject$sampling_steps$sample_strategy"
@@ -90,4 +97,6 @@ python -m flowr.gen.generate_from_pdb \
     # --interaction_inpainting \
     # --func_group_inpainting \
     # --scaffold_inpainting \
+    # --substructure_inpainting \
+    # --substructure \
 
