@@ -1930,6 +1930,92 @@ class LigandPocketCFM(pl.LightningModule):
         charge_loss = charge_loss.mean() * self.charge_loss_weight
         return charge_loss
 
+    def _build_trajectory(
+        self,
+        curr,
+        predicted,
+        pocket_data,
+        iter: int = 0,
+        step: int = 0,
+    ):
+        pred_complex = self.builder.add_ligand_to_pocket(
+            lig_data=predicted,
+            pocket_data=pocket_data,
+        )
+        self.builder.write_xyz_file_from_batch(
+            data=pred_complex,
+            coord_scale=self.coord_scale,
+            path=os.path.join(self.hparams.save_dir, f"traj_pred_{iter}"),
+            t=step,
+        )
+        # Move predictions to CPU
+        predictions = {
+            k: v.cpu().detach() if torch.is_tensor(v) else v
+            for k, v in predicted.items()
+        }
+        # Undo zero COM alignment if necessary
+        if "complex" in pocket_data:
+            predictions["coords"] = self.builder.undo_zero_com_batch(
+                predictions["coords"],
+                predictions["mask"],
+                com_list=[system.com for system in pocket_data["complex"]],
+            )
+        self.builder.write_xyz_file_from_batch(
+            data=predictions,
+            coord_scale=self.coord_scale,
+            path=os.path.join(self.hparams.save_dir, f"traj_pred_mols_{iter}"),
+            t=step,
+        )
+        # Move current state to CPU
+        curr_ = {
+            k: v.cpu().detach() if torch.is_tensor(v) else v
+            for k, v in curr.items()
+        }
+        # Undo zero COM alignment if necessary
+        if "complex" in pocket_data:
+            curr_["coords"] = self.builder.undo_zero_com_batch(
+                curr_["coords"],
+                curr_["mask"],
+                com_list=[system.com for system in pocket_data["complex"]],
+            )
+        self.builder.write_xyz_file_from_batch(
+            data=curr_,
+            coord_scale=self.coord_scale,
+            path=os.path.join(self.hparams.save_dir, f"traj_interp_{iter}"),
+            t=step,
+        )
+
+    def _save_trajectory(
+        self,
+        predicted,
+        iter: int = 0,
+    ):
+        pred_mols = self._generate_mols(predicted)
+        self.builder.write_trajectory_as_xyz(
+            pred_mols=pred_mols,
+            file_path=os.path.join(self.hparams.save_dir, f"traj_pred_mols_{iter}"),
+            save_path=os.path.join(
+                self.hparams.save_dir, "trajectories_pred_mols", f"traj_{iter}"
+            ),
+            remove_intermediate_files=True,
+        )
+        self.builder.write_trajectory_as_xyz(
+            pred_mols=pred_mols,
+            file_path=os.path.join(self.hparams.save_dir, f"traj_pred_{iter}"),
+            save_path=os.path.join(
+                self.hparams.save_dir, "trajectories_pred", f"traj_{iter}"
+            ),
+            remove_intermediate_files=True,
+        )
+        self.builder.write_trajectory_as_xyz(
+            pred_mols=pred_mols,
+            file_path=os.path.join(self.hparams.save_dir, f"traj_interp_{iter}"),
+            save_path=os.path.join(
+                self.hparams.save_dir, "trajectories_interp", f"traj_{iter}"
+            ),
+            remove_intermediate_files=True,
+        )
+
     def _generate(
         self,
         prior: dict,
@@ -2031,30 +2117,14 @@ class LigandPocketCFM(pl.LightningModule):
                         pocket_mask=pocket_data["mask"].bool(),
                         keep_interactions=self.flow_interactions,
                     )
+                # Save trajectory
                 if save_traj:
-                    self.builder.write_xyz_file_from_batch(
-                        data=predicted,
-                        coord_scale=self.coord_scale,
-                        path=os.path.join(
-                            self.hparams.save_dir, f"traj_pred_mols_{iter}"
-                        ),
-                        t=i,
-                    )
-                    pred_complex = self.builder.add_ligand_to_pocket(
-                        lig_data=predicted,
-                        pocket_data=pocket_data,
-                    )
-                    self.builder.write_xyz_file_from_batch(
-                        data=pred_complex,
-                        coord_scale=self.coord_scale,
-                        path=os.path.join(self.hparams.save_dir, f"traj_pred_{iter}"),
-                        t=i,
-                    )
-                    self.builder.write_xyz_file_from_batch(
-                        data=curr,
-                        coord_scale=self.coord_scale,
-                        path=os.path.join(self.hparams.save_dir, f"traj_interp_{iter}"),
-                        t=i,
+                    self._build_trajectory(
+                        curr,
+                        predicted,
+                        pocket_data,
+                        iter=iter,
+                        step=i,
                     )
 
                 lig_times_cont = times[0] + step_size
@@ -2123,33 +2193,6 @@ class LigandPocketCFM(pl.LightningModule):
                         keep_interactions=self.flow_interactions,
                     )
 
-        if save_traj:
-            pred_mols = self._generate_mols(predicted)
-            self.builder.write_trajectory_as_xyz(
-                pred_mols=pred_mols,
-                file_path=os.path.join(self.hparams.save_dir, f"traj_pred_mols_{iter}"),
-                save_path=os.path.join(
-                    self.hparams.save_dir, "trajectories_pred_mols", f"traj_{iter}"
-                ),
-                remove_intermediate_files=True,
-            )
-            self.builder.write_trajectory_as_xyz(
-                pred_mols=pred_mols,
-                file_path=os.path.join(self.hparams.save_dir, f"traj_pred_{iter}"),
-                save_path=os.path.join(
-                    self.hparams.save_dir, "trajectories_pred", f"traj_{iter}"
-                ),
-                remove_intermediate_files=True,
-            )
-            self.builder.write_trajectory_as_xyz(
-                pred_mols=pred_mols,
-                file_path=os.path.join(self.hparams.save_dir, f"traj_interp_{iter}"),
-                save_path=os.path.join(
-                    self.hparams.save_dir, "trajectories_interp", f"traj_{iter}"
-                ),
-                remove_intermediate_files=True,
-            )
-
         # Move everything to CPU
         predicted = {
             k: v.cpu().detach() if torch.is_tensor(v) else v
@@ -2164,6 +2207,13 @@ class LigandPocketCFM(pl.LightningModule):
                 predicted["mask"],
                 com_list=[system.com for system in pocket_data["complex"]],
             )
+
+        if save_traj:
+            self._save_trajectory(
+                predicted,
+                iter=iter,
+            )
+
         return predicted
 
     def _generate_mols(self, generated, scale=1.0, sanitise=True):
