@@ -54,7 +54,7 @@ For training, generation and evaluation, we provide basic bash and SLURM scripts
 
 ### Data
 Download the SPINDR dataset, the FLOWR checkpoint and generated samples here:
-[Zenodo](https://zenodo.org/uploads/15212510).
+[Zenodo](https://zenodo.org/records/15257565).
 
 Download the genbench3d_data.tar and place it untarred in the repo (we will get rid of this dependency in the future).
 
@@ -87,6 +87,7 @@ sbatch scripts/gen_spindr.sl
 After training (or with the provided flowr.ckpt), you can generate novel molecules given a PDB or CIF protein/pocket file.
 
 If you provide a protein PDB/CIF file, you need to provide a ligand file as well to cut out the pocket (default: 6A cutoff - modify if needed).
+Currently, Multimers are not supported. Please modify (single-chain) or cut the protein in advance.
 
 Note, if you want to run conditional generation, you need to provide a ligand file as reference. 
 
