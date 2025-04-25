@@ -77,7 +77,7 @@ def extract_fragments(to_mols: list[Chem.Mol], maxCuts: int = 3):
                 mask[torch.tensor(findices)] = 1
         return mask
 
-    return [fragment_per_mol(mol) for mol in to_mols]
+    return [fragment_per_mol(mol, maxCuts=maxCuts) for mol in to_mols]
 
 
 def extract_substructure(

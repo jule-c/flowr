@@ -13,8 +13,8 @@ import useful_rdkit_utils as uru
 from rdkit import Chem
 from rdkit.Chem import PandasTools
 
-from flowr.evaluate_dataset import load_data
-from flowr.evaluate_util import gather_predictions, gather_predictions_pilot
+from flowr.eval.evaluate_dataset import load_data
+from flowr.eval.evaluate_util import gather_predictions, gather_predictions_pilot
 from flowr.scriptutil import print_results
 from flowr.util.rdkit import sanitize_list, write_sdf_file
 

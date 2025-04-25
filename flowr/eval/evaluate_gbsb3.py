@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 import yaml
 
-from flowr.evaluate_util import gather_predictions, gather_predictions_pilot
+from flowr.eval.evaluate_util import gather_predictions, gather_predictions_pilot
 from flowr.util.metrics import evaluate_gbsb3_metrics
 from flowr.util.rdkit import sanitize_list
 

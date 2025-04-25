@@ -9,7 +9,6 @@ from rdkit.Chem import Mol
 from genbench3d.geometry import ReferenceGeometry
 
 from .conf_ensemble import ConfEnsembleLibrary, GeneratedCEL
-from .data.generated_sample_reader import ASEDBReader
 from .metrics import (
     Diversity2D,
     Diversity3D,
@@ -208,18 +207,6 @@ class GenBench3D:
         )
         return self.get_results_for_cel(cel, average=average)
 
-    def get_results_for_ase_db(
-        self,
-        filepath: str,
-        cel_name: str = "generated_molecules",
-        n_total_mols: int = None,
-    ) -> Dict[str, Any]:
-        reader = ASEDBReader()
-        cel, self.n_total_mols = reader.read(filepath=filepath, cel_name=cel_name)
-        if n_total_mols:  # User defined number of generated molecules
-            self.n_total_mols = n_total_mols
-
-        return self.get_results_for_cel(cel)
 
     def get_results_for_sdf_dir(
         self,

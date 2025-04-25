@@ -1,0 +1,11 @@
+# Gitignore file
+
+# Editors
+.vscode/
+.DS_Store
+.virtual_documents/
+
+scripts/test.sh
+scripts/test.sl
+scripts/test_eval.sh
+scripts/test_pdb.sl

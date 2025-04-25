@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from flowr.evaluate_util import (
+from flowr.eval.evaluate_util import (
     chunkify,
     gather_predictions,
     gather_predictions_pilot,

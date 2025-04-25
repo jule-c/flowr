@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 import flowr.scriptutil as util
 import flowr.util.rdkit as smolRD
-from flowr.evaluate_metrics import (
+from flowr.eval.evaluate_metrics import (
     calc_gb3_metrics_parallel,
     calc_metrics,
     compute_sbdd_metrics_parallel,
@@ -111,6 +111,7 @@ def args():
     args = argparser.parse_args()
     return args
 
+
 def load_data(data_path: str, remove_hs: bool, state: str):
     data = Path(data_path) / f"{state}.smol"
     pdb_files = []
@@ -170,7 +171,9 @@ def load_data(data_path: str, remove_hs: bool, state: str):
 
 def main(args):
 
-    ligands, ligands_with_hs, pdb_files = load_data(data_path=args.data_path, remove_hs=args.remove_hs, state=args.state)
+    ligands, ligands_with_hs, pdb_files = load_data(
+        data_path=args.data_path, remove_hs=args.remove_hs, state=args.state
+    )
 
     start_time = time.time()
     print(f"Calculating metrics for {len(ligands)} {args.state} molecules...")
