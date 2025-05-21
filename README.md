@@ -97,6 +97,9 @@ Modify `scripts/gen_pdb.sl` according to your requirements, then submit the job 
 sbatch scripts/gen_pdb.sl
 ```
 
+Generated ligands are saved as an SDF file at the specified location (save_dir).
+
+
 ### Evaluating Molecules
 
 Evaluate the generated molecules using the evaluation script. This step calculates metrics including molecular validity, uniqueness, and interaction recovery.

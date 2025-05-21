@@ -14,11 +14,11 @@ import MDAnalysis as mda
 import numpy as np
 import prolif as plf
 from Bio.PDB.Polypeptide import is_aa
+from openbabel import pybel
 from rdkit import Chem
 from tqdm import tqdm
 
 from flowr.util.molrepr import GeometricMol
-from openbabel import pybel
 from flowr.util.pocket import (
     PROLIF_INTERACTIONS,
     BindingInteractions,
@@ -189,6 +189,8 @@ def process_complex(
     txt_path=None,
     remove_hs=False,
     kekulize=False,
+    add_placeholder_ligand=False,
+    num_heavy_atoms=None,
     add_bonds_to_protein=True,
     add_hs_to_protein=False,
     pocket_cutoff=6.0,
@@ -198,6 +200,26 @@ def process_complex(
     pocket_type="holo",
     split=None,
 ):
+    """Process a complex from PDB and SDF files.
+    Args:
+        struct_path (str): Path to the PDB file.
+        sdf_path (str): Path to the SDF file.
+        txt_path (str): Path to the TXT file with residue IDs.
+        remove_hs (bool): Whether to remove hydrogens from the ligand.
+        kekulize (bool): Whether to kekulize the ligand.
+        add_placeholder_ligand (bool): Whether to add a placeholder ligand.
+        num_heavy_atoms (int): Number of heavy atoms in the ligand if placeholder is used.
+        add_bonds_to_protein (bool): Whether to add bonds to the protein.
+        add_hs_to_protein (bool): Whether to add hydrogens to the protein and optimize.
+        pocket_cutoff (float): Cutoff distance for pocket extraction.
+        cut_pocket (bool): Whether to cut out the pocket from the protein.
+        pocket_size_threshold (int): Minimum size of the pocket.
+        compute_interactions (bool): Whether to compute interactions.
+        pocket_type (str): Type of pocket ("holo" or "apo").
+        split (str): Split name for saving systems.
+    Returns:
+        PocketComplex: The processed pocket complex.
+    """
     ligand = None
     if sdf_path is not None:
         if sdf_path.endswith(".sdf"):
@@ -209,12 +231,16 @@ def process_complex(
             except Exception:
                 mol_ob = next(pybel.readfile("sdf", sdf_path), None)
                 if mol_ob is None:
-                    print(f"Could not read ligand from {sdf_path} using RDKit nor Open Babel. Skipping.")
+                    print(
+                        f"Could not read ligand from {sdf_path} using RDKit nor Open Babel. Skipping."
+                    )
                     return
                 mol_block = mol_ob.write("mol")
                 mol = Chem.MolFromMolBlock(mol_block, removeHs=remove_hs)
                 if mol is None:
-                    print(f"Could not convert ligand to an RDKit molecule from {sdf_path}. Skipping.")
+                    print(
+                        f"Could not convert ligand to an RDKit molecule from {sdf_path}. Skipping."
+                    )
                     return
         elif sdf_path.endswith(".pdb"):
             mol = Chem.MolFromPDBFile(str(sdf_path), removeHs=remove_hs)
@@ -229,6 +255,18 @@ def process_complex(
             print(f"Error processing ligand {sdf_path}: {e}")
             return
         ligand.full_mol = ligand.copy()
+    elif add_placeholder_ligand:
+        # Create a placeholder ligand with the specified number of heavy atoms
+        if num_heavy_atoms is None:
+            raise ValueError(
+                "num_heavy_atoms must be specified when add_placeholder_ligand is True"
+            )
+        ligand = GeometricMol.from_placeholder(num_heavy_atoms)
+        ligand.full_mol = ligand.copy()
+    else:
+        raise ValueError(
+            "Ligand file or placeholder ligand with specified number of atoms must be provided"
+        )
 
     # Load protein from PDB
     pocket = process_pdb(

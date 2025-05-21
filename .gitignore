@@ -1,4 +1,5 @@
 # Gitignore file
+.gitignore
 
 # Editors
 .vscode/

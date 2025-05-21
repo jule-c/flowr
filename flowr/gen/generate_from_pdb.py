@@ -435,9 +435,14 @@ def load_model(args):
 
 def load_data(args, hparams, vocab):
     # Load the data
+    assert (
+        args.ligand_file is not None or args.num_heavy_atoms is not None
+    ), "Either a ligand file or num_heavy_atoms must be provided."
     system = process_complex(
         args.pdb_file,
         sdf_path=args.ligand_file,
+        add_placeholder_ligand=args.num_heavy_atoms is not None,
+        num_heavy_atoms=args.num_heavy_atoms,
         add_bonds_to_protein=True,
         add_hs_to_protein=args.protonate_pocket,
         pocket_cutoff=args.pocket_cutoff,
@@ -446,7 +451,9 @@ def load_data(args, hparams, vocab):
         pocket_type=args.pocket_type,
         compute_interactions=args.compute_interactions,
     )
-    system = system.remove_hs(include_ligand=hparams["remove_hs"])
+    system = system.remove_hs(
+        include_ligand=hparams["remove_hs"] and not args.num_heavy_atoms
+    )
     systems = [system]
     data = PocketComplexBatch(systems)
 
@@ -651,7 +658,9 @@ def evaluate(args):
 
     run_time = time.time() - start
     if num_ligands == 0:
-        raise RuntimeError(f"Reached {args.max_sample_iter} sampling iterations, but could not find any ligands.")
+        raise RuntimeError(
+            f"Reached {args.max_sample_iter} sampling iterations, but could not find any ligands."
+        )
     elif num_ligands < args.sample_n_molecules_per_target:
         print(
             f"FYI: Reached {args.max_sample_iter} sampling iterations, but could only find {num_ligands} ligands."
@@ -662,10 +671,18 @@ def evaluate(args):
             all_gen_pdbs = all_gen_pdbs[: args.sample_n_molecules_per_target]
 
     data = batch[1]
-    ref_ligs = model._generate_ligs(
-        data, lig_mask=data["lig_mask"].bool(), scale=model.coord_scale
-    )[0]
-    ref_lig_with_hs = model.retrieve_ligs_with_hs(data, save_idx=0)
+    ref_ligs = (
+        model._generate_ligs(
+            data, lig_mask=data["lig_mask"].bool(), scale=model.coord_scale
+        )[0]
+        if not args.num_heavy_atoms
+        else None
+    )
+    ref_lig_with_hs = (
+        model.retrieve_ligs_with_hs(data, save_idx=0)
+        if not args.num_heavy_atoms
+        else None
+    )
     ref_pdb = model.retrieve_pdbs(
         data, save_dir=Path(args.save_dir) / "ref_pdbs", save_idx=0
     )
@@ -772,6 +789,9 @@ def evaluate(args):
     print("Sampling finished.")
 
     if args.compute_interaction_recovery:
+        assert (
+            args.ligand_file is not None
+        ), "Reference ligand file is required for interaction recovery."
         print("Computing interaction recovery...")
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
         # Split the list into chunks of size args.num_workers
@@ -809,7 +829,7 @@ def get_args():
     # fmt: off
     parser = argparse.ArgumentParser(description='Data generation')
     parser.add_argument('--pdb_file', type=str, required=True)
-    parser.add_argument('--ligand_file', type=str, required=True)
+    parser.add_argument('--ligand_file', type=str)
     parser.add_argument('--res_txt_file', type=str, default=None)
     
     parser.add_argument('--cut_pocket', action='store_true')
@@ -818,6 +838,7 @@ def get_args():
     parser.add_argument('--compute_interaction_recovery', action='store_true')
     parser.add_argument('--protonate_pocket', action='store_true')
     parser.add_argument('--protonate_generated_ligands', action='store_true')
+    parser.add_argument('--num_heavy_atoms', type=int, default=None)
 
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument("--gpus", default=8, type=int)
