@@ -33,6 +33,7 @@ ckpt="$ckpt_path/your_ckpt.ckpt"
 ## NOTE: If the protein/pocket is not protonated, but you want to compute interactions, specify --protonate_pocket below
 ## NOTE: If you provide a protein PDB/CIF file, you need to provide a ligand file as well to cut out the pocket (default: 6A cutoff - adjust below if needed).
 ## NOTE: If you want to run conditional generation, you need to provide a ligand file as reference. 
+## NOTE: If you want to run unconditional generation without a ligand file, you need to specifiy --num_heavy_atoms (if you also specify --sample_mol_sizes, the number of heavy atoms will vary +-10%)
 pdb_id="your_pdb_id"
 data_path="$main_path/$pdb_id"
 pdb_file="$data_path/$pdb_id.pdb"
@@ -93,6 +94,7 @@ python -m flowr.gen.generate_from_pdb \
     --categorical_strategy uniform-sample \
     --filter_valid_unique \
     --sample_mol_sizes \
+    # --num_heavy_atoms 20 \
     # --protonate_pocket \
     # --linker_inpainting \
     # --interaction_inpainting \

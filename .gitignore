@@ -1,12 +1,14 @@
-# Gitignore file
-.gitignore
+# Gitignore file for flowr
 
 # Editors
 .vscode/
 .DS_Store
+**/.DS_Store
 .virtual_documents/
 
+# Scripts
 scripts/test.sh
 scripts/test.sl
 scripts/test_eval.sh
 scripts/test_pdb.sl
+scripts/test_pdb_only.sl
