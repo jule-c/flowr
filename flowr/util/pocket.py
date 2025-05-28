@@ -626,9 +626,17 @@ class ProteinPocket:
             write_path = Path(tmp_dir) / "pocket.pdb"
             pocket_copy.write_pdb(write_path, include_bonds=True)
 
-            # Create prolif molecule by first reading using MDAnalysis
-            holo_mda = mda.Universe(str(write_path.resolve()), guess_bonds=True)
-            holo_mol = plf.Molecule.from_mda(holo_mda)
+            try:
+                # Create prolif molecule by first reading using MDAnalysis
+                holo_mda = mda.Universe(str(write_path.resolve()), guess_bonds=True)
+                holo_mol = plf.Molecule.from_mda(holo_mda)
+            except Exception as e:
+                print(f"Error reading PDB file {write_path}: {e}")
+                print("Trying to read using RDKit instead of MDAnalysis...")
+                protein_mol = Chem.MolFromPDBFile(
+                    str(write_path.resolve()), removeHs=False, proximityBonding=True
+                )
+                holo_mol = plf.Molecule.from_rdkit(protein_mol)
 
         return holo_mol
 

@@ -1448,12 +1448,14 @@ class LigandPocketOptimization:
 
 def to_prolif(pdb_file) -> plf.Molecule:
     """Convert a PDB file to a prolif Molecule object"""
-    pocket = mda.Universe(str(pdb_file), guess_bonds=True)
     try:
+        pocket = mda.Universe(str(pdb_file), guess_bonds=True)
         pocket = plf.Molecule.from_mda(pocket)
     except Exception:
-        pocket = mda.Universe(str(pdb_file), guess_bonds=False)
-        pocket = plf.Molecule.from_mda(pocket)
+        protein_mol = Chem.MolFromPDBFile(
+            str(pdb_file), removeHs=False, proximityBonding=True
+        )
+        pocket = plf.Molecule.from_rdkit(protein_mol)
     return pocket
 
 
