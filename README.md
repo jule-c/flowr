@@ -87,7 +87,7 @@ sbatch scripts/gen_spindr.sl
 After training (or with the provided flowr.ckpt), you can generate novel molecules given a PDB or CIF protein/pocket file.
 
 If you provide a protein PDB/CIF file, you need to provide a ligand file as well to cut out the pocket (default: 6A cutoff - modify if needed).
-Currently, Multimers are not supported. Please modify (single-chain) or cut the protein in advance.
+We recommend using (Schrödinger-)prepared complexes for best results with the protein and ligand being protonated.
 
 Note, if you want to run conditional generation, you need to provide a ligand file as reference. 
 
@@ -97,7 +97,7 @@ Modify `scripts/gen_pdb.sl` according to your requirements, then submit the job 
 sbatch scripts/gen_pdb.sl
 ```
 
-Generated ligands are saved as an SDF file at the specified location (save_dir).
+Generated ligands are saved as an SDF file at the specified location (save_dir) alongside the extracted pockets. 
 
 
 ### Evaluating Molecules

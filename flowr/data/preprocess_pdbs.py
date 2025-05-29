@@ -108,8 +108,20 @@ def process_pdb(
 
     if cut_pocket:
         # Cut pocket
+        ligand_coords = np.array(ligand._coords)
+        distances = np.linalg.norm(
+            structure.coord[:, None, :] - ligand_coords[None, :, :], axis=-1
+        )
+        atoms_in_pocket = (distances < pocket_cutoff).any(axis=1)
+        chains_in_pocket = list(structure.chain_id[atoms_in_pocket])
+        assert len(set(chains_in_pocket)) == 1, (
+            "Pocket must be from a single chain, found multiple chains: "
+            f"{set(chains_in_pocket)}"
+        )
+        structure = structure[np.isin(structure.chain_id, chains_in_pocket)]
         res_ids = set(structure.res_id)
         res_id_filter = []
+
         for res_id in res_ids:
             res = structure[structure.res_id == res_id]
             if (
@@ -123,6 +135,7 @@ def process_pdb(
                 < pocket_cutoff
             ):
                 res_id_filter.append(res_id)
+        # only take residues that are in the pocket
         structure = structure[np.isin(structure.res_id, res_id_filter)]
 
     pocket = ProteinPocket.from_pocket_atoms(structure)
