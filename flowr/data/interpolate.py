@@ -1001,11 +1001,17 @@ class ComplexInterpolant(GeometricInterpolant):
                 ]
             if self.scaffold_inpainting:
                 scaffold_mask = extract_scaffolds(
-                    [mol.ligand.to_rdkit(vocab=self.vocab) for mol in to_mols]
+                    [
+                        mol.ligand.to_rdkit(vocab=self.vocab, convert_charges=True)
+                        for mol in to_mols
+                    ]
                 )
             if self.func_group_inpainting:
                 func_group_mask = extract_func_groups(
-                    [mol.ligand.to_rdkit(vocab=self.vocab) for mol in to_mols]
+                    [
+                        mol.ligand.to_rdkit(vocab=self.vocab, convert_charges=True)
+                        for mol in to_mols
+                    ]
                 )
             if self.substructure_inpainting:
                 assert (
@@ -1015,16 +1021,25 @@ class ComplexInterpolant(GeometricInterpolant):
                     self.substructure, list
                 ), "Substructure must be a string or a list of indices"
                 custom_mask = extract_substructure(
-                    [mol.ligand.to_rdkit(vocab=self.vocab) for mol in to_mols],
+                    [
+                        mol.ligand.to_rdkit(vocab=self.vocab, convert_charges=True)
+                        for mol in to_mols
+                    ],
                     substructure_query=self.substructure,
                 )
             if self.linker_inpainting:
                 linker_mask = extract_linkers(
-                    [mol.ligand.to_rdkit(vocab=self.vocab) for mol in to_mols]
+                    [
+                        mol.ligand.to_rdkit(vocab=self.vocab, convert_charges=True)
+                        for mol in to_mols
+                    ]
                 )
             if self.fragment_inpainting:
                 fragment_mask = extract_fragments(
-                    [mol.ligand.to_rdkit(vocab=self.vocab) for mol in to_mols],
+                    [
+                        mol.ligand.to_rdkit(vocab=self.vocab, convert_charges=True)
+                        for mol in to_mols
+                    ],
                     maxCuts=self.max_fragment_cuts,
                 )
 

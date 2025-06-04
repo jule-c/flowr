@@ -7,7 +7,6 @@
 #SBATCH --cpus-per-task=12
 #SBATCH --partition=your_partition
 #SBATCH --gres=gpu:1
-#SBATCH --array=1-2
 #SBATCH --output=your_output_path/generate-sbdd_%j.out
 #SBATCH --error=your_output_path/generate-sbdd_%j.err
 
@@ -18,7 +17,7 @@ conda activate flowr
 
 export PYTHONPATH="your_flowr_directory"
 
-num_gpus=2
+num_gpus=1
 num_workers=12
 
 # MAIN PATH

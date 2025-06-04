@@ -670,6 +670,7 @@ class GeometricMol(SmolMol):
         sanitise: Optional[bool] = False,
         kekulize: Optional[bool] = False,
         remove_hs: Optional[bool] = False,
+        convert_charges: Optional[bool] = False,
     ) -> Chem.rdchem.Mol:
         if len(self.atomics.size()) == 2:
             assert (
@@ -684,6 +685,9 @@ class GeometricMol(SmolMol):
 
         if len(self.charges.size()) == 2:
             charges = torch.argmax(self.charges, dim=1).tolist()
+            charges = np.array([smolRD.IDX_CHARGE_MAP[charge] for charge in charges])
+        elif convert_charges:
+            charges = self.charges.tolist()
             charges = np.array([smolRD.IDX_CHARGE_MAP[charge] for charge in charges])
         else:
             charges = self.charges.numpy()

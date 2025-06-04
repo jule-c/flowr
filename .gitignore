@@ -12,3 +12,4 @@ scripts/test.sl
 scripts/test_eval.sh
 scripts/test_pdb.sl
 scripts/test_pdb_only.sl
+scripts/generate_8ucc.sl
