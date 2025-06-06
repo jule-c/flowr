@@ -23,7 +23,6 @@ FLOWR is a research repository that investigates continuous and discrete flow ma
 
 ## Installation
 
-### Hardware Requirements
 - **GPU**: CUDA-compatible GPU with at least 40GB VRAM recommended for training and generation
 
 - **Package Manager**: [mamba](https://mamba.readthedocs.io)  
