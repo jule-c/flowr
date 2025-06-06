@@ -20,7 +20,18 @@ FLOWR is a research repository that investigates continuous and discrete flow ma
 
 ---
 
+
 ## Installation
+
+### Hardware Requirements
+- **GPU**: CUDA-compatible GPU with at least 40GB VRAM recommended for training and generation
+
+- **Package Manager**: [mamba](https://mamba.readthedocs.io)  
+  Install via:
+  ```bash
+  curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh
+  bash Miniforge3-$(uname)-$(uname -m).sh
+  ```
 
 1. **Create the Environment**  
    Install the required environment using [mamba](https://mamba.readthedocs.io):
@@ -45,6 +56,8 @@ FLOWR is a research repository that investigates continuous and discrete flow ma
 4. **Install ADFR**
    Install the [ADFR suite](https://ccsb.scripps.edu/adfr/downloads/).
    Adjust the prepare_receptor_bin_path in genbench3d/configs/default.yaml to match the ADFR installation.
+
+
 ---
 
 ## Getting Started
