@@ -590,6 +590,7 @@ class GeometricMol(SmolMol):
             # E.g. needed when ligands loaded do not contain hydrogens, but carry aromatic bonds (reconstruction with RDKit would then fail -> remove aromaticity)
             Chem.Kekulize(mol, clearAromaticFlags=True)
 
+        # or simply add dummy hydrogens, build the geom_mol and remove again
         has_hydrogens = smolRD.has_explicit_hydrogens(mol)
         if not kekulize and not has_hydrogens:
             mol = Chem.AddHs(mol, addCoords=True)

@@ -65,7 +65,9 @@ We provide the full SPINDR data in both .smol and .cif format, as well as a full
 For training, generation and evaluation, we provide basic bash and SLURM scripts in the `scripts/` directory. These scripts are intended to be modified and adjusted according to your computational resources and experimental needs.
 
 ### Data
-Download the SPINDR dataset, the FLOWR checkpoint and generated samples here:
+Download the FLOWR checkpoints here:
+[Zenodo](https://zenodo.org/records/15737419).
+Download the SPINDR dataset (and generated samples if needed) here:
 [Zenodo](https://zenodo.org/records/15257565).
 
 Download the genbench3d_data.tar and place it untarred in the repo (we will get rid of this dependency in the future).
