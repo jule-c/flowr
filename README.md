@@ -64,9 +64,14 @@ FLOWR is a research repository that investigates continuous and discrete flow ma
 We provide the full SPINDR data in both .smol and .cif format, as well as a fully trained FLOWR model checkpoint and generated samples.
 For training, generation and evaluation, we provide basic bash and SLURM scripts in the `scripts/` directory. These scripts are intended to be modified and adjusted according to your computational resources and experimental needs.
 
-### Data
+### Checkpoints
+
+There are two checkpoints, one model trained without and one with explicit hydrogens.
 Download the FLOWR checkpoints here:
 [Zenodo](https://zenodo.org/records/15737419).
+
+### Data
+
 Download the SPINDR dataset (and generated samples if needed) here:
 [Zenodo](https://zenodo.org/records/15257565).
 
