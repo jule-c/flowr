@@ -1434,7 +1434,7 @@ class LigandPocketCFM(pl.LightningModule):
                 torch.argmax(bonds, dim=-1),
                 atom_mask=mask,
                 extra_feats=times,
-                pocket_coords=coords,
+                pocket_coords=pocket_coords,
                 pocket_atom_names=pocket_atoms,
                 pocket_atom_charges=pocket_charges,
                 pocket_res_types=pocket_res,
@@ -1968,8 +1968,7 @@ class LigandPocketCFM(pl.LightningModule):
         )
         # Move current state to CPU
         curr_ = {
-            k: v.cpu().detach() if torch.is_tensor(v) else v
-            for k, v in curr.items()
+            k: v.cpu().detach() if torch.is_tensor(v) else v for k, v in curr.items()
         }
         # Undo zero COM alignment if necessary
         if "complex" in pocket_data:

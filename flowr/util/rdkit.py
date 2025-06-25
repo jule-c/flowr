@@ -179,6 +179,25 @@ def remove_radicals(mol: Chem.Mol, sanitize: bool = True) -> Chem.Mol:
     return mol
 
 
+def has_explicit_hydrogens(mol: Chem.rdchem.Mol) -> bool:
+    """Check whether an RDKit molecule has explicit hydrogen atoms
+
+    Args:
+        mol (Chem.Mol): RDKit molecule object
+
+    Returns:
+        bool: True if the molecule has explicit hydrogen atoms, False otherwise
+    """
+    if mol is None:
+        return False
+
+    for atom in mol.GetAtoms():
+        if atom.GetAtomicNum() == 1:  # Hydrogen has atomic number 1
+            return True
+
+    return False
+
+
 def has_radicals(mol: Chem.Mol) -> bool:
     """Check if a molecule has any free radicals."""
 

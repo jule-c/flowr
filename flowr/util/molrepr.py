@@ -529,7 +529,10 @@ class GeometricMol(SmolMol):
     # TODO allow data to not have all dict keys
     @staticmethod
     def from_bytes(
-        data: bytes, remove_hs: bool = False, keep_orig_data: bool = False
+        data: bytes,
+        remove_hs: bool = False,
+        keep_orig_data: bool = False,
+        check_valid: bool = False,
     ) -> GeometricMol:
         obj = pickle.loads(data)
         if keep_orig_data:
@@ -546,8 +549,9 @@ class GeometricMol(SmolMol):
         _check_dict_key(obj, "charges")
         _check_dict_key(obj, "device")
         _check_dict_key(obj, "id")
-        # if not _check_mol_valid(obj):
-        #     return
+        if check_valid:
+            if not _check_mol_valid(obj):
+                return
 
         if obj.get("bond_types") is not None:
             bond_indices = obj["bond_indices"]
@@ -586,6 +590,10 @@ class GeometricMol(SmolMol):
             # E.g. needed when ligands loaded do not contain hydrogens, but carry aromatic bonds (reconstruction with RDKit would then fail -> remove aromaticity)
             Chem.Kekulize(mol, clearAromaticFlags=True)
 
+        has_hydrogens = smolRD.has_explicit_hydrogens(mol)
+        if not kekulize and not has_hydrogens:
+            mol = Chem.AddHs(mol, addCoords=True)
+
         conf = mol.GetConformer()
         smiles = smolRD.smiles_from_mol(mol)
 
@@ -618,6 +626,9 @@ class GeometricMol(SmolMol):
         mol = GeometricMol(
             coords, atomics, bond_indices, bond_types, charges=charges, str_id=smiles
         )
+        if not has_hydrogens:
+            # If the molecule did not have hydrogens, remove them now
+            mol = mol.remove_hs()
         return mol
 
     @staticmethod
@@ -921,9 +932,13 @@ class GeometricMolBatch(SmolBatch[GeometricMol]):
 
     staticmethod
 
-    def from_bytes(data: bytes, remove_hs: bool = False) -> GeometricMolBatch:
+    def from_bytes(
+        data: bytes, remove_hs: bool = False, check_valid: bool = False
+    ) -> GeometricMolBatch:
         mols = [
-            GeometricMol.from_bytes(mol_bytes, remove_hs=remove_hs)
+            GeometricMol.from_bytes(
+                mol_bytes, remove_hs=remove_hs, check_valid=check_valid
+            )
             for mol_bytes in pickle.loads(data)
         ]
         failed_mols = mols.count(None)

@@ -114,16 +114,19 @@ def process_pdb(
         )
         atoms_in_pocket = (distances < pocket_cutoff).any(axis=1)
         chains_in_pocket = list(structure.chain_id[atoms_in_pocket])
-        assert len(set(chains_in_pocket)) == 1, (
-            "Pocket must be from a single chain, found multiple chains: "
-            f"{set(chains_in_pocket)}"
-        )
-        structure = structure[np.isin(structure.chain_id, chains_in_pocket)]
-        res_ids = set(structure.res_id)
-        res_id_filter = []
+        chains_in_pocket = [chain for chain in chains_in_pocket if len(chain) > 0]
 
-        for res_id in res_ids:
-            res = structure[structure.res_id == res_id]
+        structure = structure[np.isin(structure.chain_id, chains_in_pocket)]
+
+        # Create unique identifiers combining chain_id and res_id
+        chain_res_pairs = set(zip(structure.chain_id, structure.res_id))
+        res_filter_mask = np.zeros(len(structure), dtype=bool)
+
+        for chain_id, res_id in chain_res_pairs:
+            # Get residue atoms for this specific chain-residue combination
+            res_mask = (structure.chain_id == chain_id) & (structure.res_id == res_id)
+            res = structure[res_mask]
+
             if (
                 is_aa(res.res_name[0], standard=True)
                 and (
@@ -134,9 +137,11 @@ def process_pdb(
                 ).min()
                 < pocket_cutoff
             ):
-                res_id_filter.append(res_id)
-        # only take residues that are in the pocket
-        structure = structure[np.isin(structure.res_id, res_id_filter)]
+                # Mark all atoms of this chain-residue combination for inclusion
+                res_filter_mask |= res_mask
+
+        # Filter structure using the boolean mask
+        structure = structure[res_filter_mask]
 
     pocket = ProteinPocket.from_pocket_atoms(structure)
     return pocket
