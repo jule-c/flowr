@@ -75,6 +75,9 @@ Download the FLOWR checkpoints here:
 Download the SPINDR dataset (and generated samples if needed) here:
 [Zenodo](https://zenodo.org/records/15257565).
 
+The 'raw' SPINDR data for both pocket and ligand data can be downloaded here:
+[Zenodo](https://zenodo.org/records/15991057).
+
 Download the genbench3d_data.tar and place it untarred in the repo (we will get rid of this dependency in the future).
 
 To train a model, unzip the smol_data.zip to get the smol-files. Specify the directory they are placed in the respective scripts (see below).
