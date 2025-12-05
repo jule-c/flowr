@@ -822,6 +822,8 @@ class PocketComplex:
         ligand = GeometricMol.from_bytes(
             obj["ligand"], remove_hs=False, keep_orig_data=True
         )
+        if ligand is None:
+            return
         apo = (
             ProteinPocket.from_bytes(obj["apo"]) if obj.get("apo") is not None else None
         )
@@ -1475,7 +1477,7 @@ class PocketComplexBatch(Sequence):
             for system in tqdm(pickle.loads(data))
         ]
         full_len = len(systems)
-        systems = [system for system in systems if system.ligand is not None]
+        systems = [system for system in systems if system is not None]
         print(f"Failed to load {full_len-len(systems)} complexes.")
         return PocketComplexBatch(systems)
 

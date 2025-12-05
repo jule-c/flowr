@@ -1,4 +1,5 @@
 #!/bin/sh
+# Modify this scripts to your needs and run it to train a model on the Spindr dataset.
 
 main_path="your_main_directory"
 exp_name="your_experiment_name" # This is also the directory name for the logs
@@ -20,8 +21,8 @@ python -m flowr.train \
     --pocket_n_layers 6 \
     --arch pocket \
     --pocket_noise fix \
-    --epochs 300 \
-    --val_check_epochs 5 \
+    --epochs 400 \
+    --val_check_epochs 1 \
     --self_condition \
     --max_atoms_pocket 600 \
     --dataset "$dataset" \
@@ -30,15 +31,15 @@ python -m flowr.train \
     --save_dir "$save_dir" \
     --use_ema \
     --ema_decay 0.999 \
-    --lr 4.0e-4 \
+    --lr 5.0e-4 \
     --lr_schedule exponential \
     --lr_gamma 0.998 \
     --use_lig_pocket_rbf \
     --remove_hs \
     --optimal_transport equivariant \
     --categorical_strategy uniform-sample \
-    # --mixed_uncond_inpaint \
-    # --interaction_inpainting \
-    # --scaffold_inpainting \
-    # --func_group_inpainting \
+    --mixed_uncond_inpaint \
+    --interaction_inpainting \
+    --scaffold_inpainting \
+    --func_group_inpainting \
     # --linker_inpainting \

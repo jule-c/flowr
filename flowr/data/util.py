@@ -448,7 +448,7 @@ class Statistics:
             f"{split}_is_in_ring_{h}.npy",
             f"{split}_hybridization_{h}.npy",
         ]
-        if dataset in ["plinder", "crossdocked", "kinodata", "kiba"]:
+        if dataset in ["spindr", "plinder", "crossdocked", "kinodata", "kiba"]:
             processed_paths.extend(
                 [
                     f"{split}_is_h_donor_{h}.npy",
@@ -475,12 +475,12 @@ class Statistics:
             ),
             is_h_acceptor=(
                 torch.from_numpy(np.load(processed_paths[12])).float()
-                if dataset in ["plinder", "crossdocked", "kinodata", "kiba"]
+                if dataset in ["spindr", "plinder", "crossdocked", "kinodata", "kiba"]
                 else None
             ),
             dihedrals=(
                 torch.from_numpy(np.load(processed_paths[13])).float()
-                if dataset in ["plinder", "crossdocked", "kinodata", "kiba"]
+                if dataset in ["spindr", "plinder", "crossdocked", "kinodata", "kiba"]
                 else None
             ),
         )

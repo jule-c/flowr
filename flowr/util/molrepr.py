@@ -532,7 +532,7 @@ class GeometricMol(SmolMol):
         data: bytes,
         remove_hs: bool = False,
         keep_orig_data: bool = False,
-        check_valid: bool = False,
+        check_valid: bool = True,
     ) -> GeometricMol:
         obj = pickle.loads(data)
         if keep_orig_data:
