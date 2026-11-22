@@ -323,6 +323,51 @@ def load_model(args):
     hparams["data_path"] = args.data_path
     hparams["save_dir"] = args.save_dir
 
+    # *** Electrostatic field settings (申请书第15-16页: 生成模型) ***
+    # Normalise the efield hyperparameters (old checkpoints do not store them),
+    # then apply any command line overrides. The guidance flags only change
+    # the sampling process and add no network weights, so they can be used
+    # with any pocket-architecture checkpoint. use_electric_field (field
+    # conditioning of the network) requires a checkpoint that was trained
+    # with --use_electric_field.
+    hparams["use_electric_field"] = hparams.get("use_electric_field", False)
+    hparams["efield_guidance"] = hparams.get("efield_guidance", False)
+    hparams["efield-guidance-scale"] = hparams.get("efield-guidance-scale", 0.0)
+    hparams["efield-cutoff"] = hparams.get("efield-cutoff", 10.0)
+    hparams["efield-softening"] = hparams.get("efield-softening", 0.5)
+    hparams["efield-drift-mode"] = hparams.get("efield-drift-mode", "force")
+    # Underscore aliases so the dashed keys bind to the named __init__
+    # arguments of LigandPocketCFM when passed as **hparams
+    hparams["efield_guidance_scale"] = hparams["efield-guidance-scale"]
+    hparams["efield_cutoff"] = hparams["efield-cutoff"]
+    hparams["efield_softening"] = hparams["efield-softening"]
+    hparams["efield_drift_mode"] = hparams["efield-drift-mode"]
+    if args.use_electric_field:
+        hparams["use_electric_field"] = True
+    if args.efield_guidance:
+        hparams["efield_guidance"] = True
+        if args.efield_guidance_scale is None and hparams["efield-guidance-scale"] == 0.0:
+            hparams["efield-guidance-scale"] = 0.05
+            print(
+                "Electric field guidance enabled without an explicit scale; "
+                "using efield_guidance_scale=0.05 "
+                "(pass --efield_guidance_scale to control it)."
+            )
+    if args.efield_guidance_scale is not None:
+        hparams["efield-guidance-scale"] = args.efield_guidance_scale
+    if args.efield_cutoff is not None:
+        hparams["efield-cutoff"] = args.efield_cutoff
+    if args.efield_softening is not None:
+        hparams["efield-softening"] = args.efield_softening
+    if args.efield_drift_mode is not None:
+        hparams["efield-drift-mode"] = args.efield_drift_mode
+    # Refresh the underscore aliases AFTER the CLI overrides so the named
+    # __init__ arguments of LigandPocketCFM receive the overridden values
+    hparams["efield_guidance_scale"] = hparams["efield-guidance-scale"]
+    hparams["efield_cutoff"] = hparams["efield-cutoff"]
+    hparams["efield_softening"] = hparams["efield-softening"]
+    hparams["efield_drift_mode"] = hparams["efield-drift-mode"]
+
     # Number of corrector iterations
     if args.corrector_iters > 0:
         assert (
@@ -396,6 +441,9 @@ def load_model(args):
             self_cond=hparams["self_cond"],
             coord_skip_connect=hparams["coord_skip_connect"],
             pocket_enc=pocket_enc,
+            use_electric_field=hparams.get("use_electric_field", False),
+            efield_cutoff=hparams.get("efield-cutoff", 10.0),
+            efield_softening=hparams.get("efield-softening", 0.5),
         )
     else:
         raise ValueError(f"Unknown architecture {args.arch}")
@@ -419,6 +467,9 @@ def load_model(args):
         type_mask_index=type_mask_index,
         bond_mask_index=bond_mask_index,
         cat_noise_level=args.cat_sampling_noise_level,
+        efield_guidance=hparams.get("efield_guidance", False),
+        efield_guidance_scale=hparams.get("efield-guidance-scale", 0.0),
+        efield_drift_mode=hparams.get("efield-drift-mode", "force"),
     )
     # Build the model
     fm_model = CFM.load_from_checkpoint(
@@ -748,7 +799,15 @@ def evaluate(args):
             with Pool(processes=args.num_workers) as pool:
                 all_gen_ligs_hs = pool.map(process_lig_partial, all_gen_ligs)
 
-        all_gen_ligs_hs = [Chem.Mol(lig) for lig in all_gen_ligs_hs]
+        n_failed_hs = sum(1 for lig in all_gen_ligs_hs if lig is None)
+        if n_failed_hs:
+            print(
+                f"{n_failed_hs}/{len(all_gen_ligs_hs)} ligands failed hydrogen "
+                "optimization and were dropped."
+            )
+        all_gen_ligs_hs = [
+            Chem.Mol(lig) for lig in all_gen_ligs_hs if lig is not None
+        ]
         out_dict["gen_ligs_hs"] = all_gen_ligs_hs
         print("Done!")
 
@@ -861,6 +920,73 @@ def get_args():
     parser.add_argument("--sample_mol_sizes", action="store_true")
     parser.add_argument("--corrector_iters", type=int, default=0)
     parser.add_argument("--use_equi_ot", action="store_true")
+
+    # OPLS4 partial charges for the electrostatic field (申请书公式(5))
+    parser.add_argument(
+        "--pocket_charge_file",
+        type=str,
+        default=None,
+        help="PQR file with per-atom partial charges for the protein pocket "
+        "(e.g. OPLS4 charges from Schrodinger prepwizard+structconvert, or "
+        "PDB2PQR). Charges are matched to the pocket atoms by residue and "
+        "atom name and used for the electrostatic field of "
+        "--use_electric_field conditioning and --efield_guidance sampling. "
+        "See scripts/add_opls4_charges.py.",
+    )
+    parser.add_argument(
+        "--pocket_charge_dir",
+        type=str,
+        default=None,
+        help="Directory with <system_id>.pqr partial charge files "
+        "(multi-target runs); missing systems fall back to data pipeline charges.",
+    )
+    parser.add_argument(
+        "--export_pocket_pdbs",
+        type=str,
+        default=None,
+        help="Directory to export pocket PDBs (use a cheap dry pass to collect "
+        "the structures that still need charging).",
+    )
+
+    # Electrostatic field guided sampling (申请书第15-16页: 生成模型).
+    # Guidance only changes sampling (works with any checkpoint);
+    # --use_electric_field conditioning requires an efield-trained checkpoint.
+    parser.add_argument(
+        "--use_electric_field",
+        action="store_true",
+        help="Condition the network on the protein electrostatic field "
+        "(requires a checkpoint trained with --use_electric_field).",
+    )
+    parser.add_argument(
+        "--efield_guidance",
+        action="store_true",
+        help="Push ligand atoms along the protein electrostatic field (F = qE) "
+        "during sampling. Works with any pocket checkpoint.",
+    )
+    parser.add_argument(
+        "--efield_guidance_scale",
+        type=float,
+        default=None,
+        help="Strength of the electric field guidance drift (e.g. 0.05).",
+    )
+    parser.add_argument(
+        "--efield_cutoff", type=float, default=None, help="Field cutoff in Angstrom."
+    )
+    parser.add_argument(
+        "--efield_softening",
+        type=float,
+        default=None,
+        help="Field softening distance in Angstrom.",
+    )
+    parser.add_argument(
+        "--efield_drift_mode",
+        type=str,
+        default=None,
+        choices=["force", "unit", "field"],
+        help="force: raw electrostatic force q*E; unit: direction of q*E; "
+        "field: every atom follows the local field direction "
+        "(recommended for neutral molecules).",
+    )
 
     parser.add_argument("--filter_valid_unique", action="store_true")
 

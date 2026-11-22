@@ -6,6 +6,10 @@ import torch
 import torch.nn as nn
 
 import flowr.util.functional as smolF
+from flowr.models.electric_field import (
+    ElectricFieldEncoder,
+    electrostatic_field,
+)
 from flowr.models.semla import BondRefine, LengthsMLP, adj_to_attn_mask
 
 # *****************************************************************************
@@ -1240,6 +1244,10 @@ class LigandDecoder(torch.nn.Module):
         self_cond=False,
         coord_skip_connect=True,
         split_continuous_discrete_time=False,
+        use_electric_field=False,
+        efield_cutoff=10.0,
+        efield_softening=0.5,
+        efield_num_rbf=16,
         eps=1e-6,
     ):
         super().__init__()
@@ -1263,6 +1271,15 @@ class LigandDecoder(torch.nn.Module):
         self.interactions = n_interaction_types is not None
         self.coord_skip_connect = coord_skip_connect
         self.split_continuous_discrete_time = split_continuous_discrete_time
+
+        # *** Electric field conditioning (申请书公式(5)) ***
+        # When enabled, the protein electrostatic field at each ligand atom is
+        # computed from the pocket partial charges and injected into the
+        # equivariant features, the invariant node features and the
+        # ligand-pocket pairwise messages (cross attention edges).
+        self.use_electric_field = use_electric_field
+        self.efield_cutoff = efield_cutoff
+        self.efield_softening = efield_softening
 
         if d_pocket_inv is None and n_interaction_types is not None:
             raise ValueError(
@@ -1294,6 +1311,22 @@ class LigandDecoder(torch.nn.Module):
             else d_edge if self.use_lig_pocket_rbf else None
         )
         d_cond_edge_out = d_edge if n_interaction_types is not None else None
+
+        # Create the electric field encoder before the layer stack so that the
+        # pairwise electrostatic features can flow into the cross attention
+        # messages. When no other ligand-pocket edge features are used, the
+        # electrostatic features alone define the conditional edge inputs.
+        if self.use_electric_field:
+            if d_cond_edge_in is None:
+                d_cond_edge_in = d_edge
+            self.efield_encoder = ElectricFieldEncoder(
+                d_equi,
+                d_inv,
+                d_cond_edge_in,
+                cutoff=self.efield_cutoff,
+                softening=self.efield_softening,
+                num_rbf=efield_num_rbf,
+            )
 
         if self.use_rbf:
             self.rbf_embed = RBFEmbed(d_equi, num_rbf=32, cutoff=5.0)
@@ -1416,6 +1449,9 @@ class LigandDecoder(torch.nn.Module):
             "split_continuous_discrete_time": self.split_continuous_discrete_time,
             "use_rbf": self.use_rbf,
             "use_sphcs": self.use_sphcs,
+            "use_electric_field": self.use_electric_field,
+            "efield-cutoff": self.efield_cutoff,
+            "efield-softening": self.efield_softening,
         }
 
     def forward(
@@ -1433,6 +1469,7 @@ class LigandDecoder(torch.nn.Module):
         pocket_invs=None,
         pocket_atom_mask=None,
         interactions=None,
+        pocket_charge_values=None,
     ):
         """Generate ligand atom types, coords, charges and bonds
 
@@ -1450,6 +1487,8 @@ class LigandDecoder(torch.nn.Module):
             pocket_invs (torch.Tensor): Invariant encoded pocket features, shape [B, N_p, d_pocket_inv]
             pocket_atom_mask (torch.Tensor): Mask for pocket atom, shape [B, N_p], 1 for real, 0 otherwise
             interactions (torch.Tensor): Interaction types between pocket and ligand, shape [B, N, N_p]
+            pocket_charge_values (torch.Tensor): Numeric pocket atom charges, shape [B, N_p],
+                used to compute the electrostatic field (公式(5)) when use_electric_field is enabled
 
         Returns:
             (predicted coordinates, atom type logits, bond logits, atom charge logits)
@@ -1570,6 +1609,53 @@ class LigandDecoder(torch.nn.Module):
         edges = self.bond_emb(equis, invs, equis, invs, edge_feats=edges)
         edges = edges * adj_matrix.unsqueeze(-1)
 
+        # *** Electrostatic field conditioning (申请书公式(5)) ***
+        # Compute the protein electrostatic field E_i at every ligand atom i
+        # from the pocket partial charges and inject it into the equivariant
+        # features, the invariant node features and the ligand-pocket pairwise
+        # messages, so that generation is conditioned on the field E in addition
+        # to the pocket structure C.
+        if self.use_electric_field:
+            if pocket_coords is None or pocket_charge_values is None:
+                raise ValueError(
+                    "The model was initialised with use_electric_field but pocket "
+                    "coords and pocket charge values must be provided."
+                )
+            efield, epot = electrostatic_field(
+                coords,
+                pocket_coords,
+                pocket_charge_values,
+                pocket_mask=pocket_atom_mask,
+                cutoff=self.efield_cutoff,
+                softening=self.efield_softening,
+            )
+            efield = efield * atom_mask.unsqueeze(-1).float()
+            epot = epot * atom_mask.unsqueeze(-1).float()
+
+            # Equivariant injection: the field is a polar vector, so a
+            # componentwise linear map keeps the features SE(3)-equivariant
+            equis = equis + self.efield_encoder.embed_equi(efield)
+
+            # Invariant injection into the attention node features
+            invs = invs + self.efield_encoder.embed_inv(efield, epot) * atom_mask.unsqueeze(
+                -1
+            ).float()
+
+            # Pairwise injection into the ligand-pocket cross attention messages
+            if self.d_pocket_inv is not None:
+                efield_edges = self.efield_encoder.embed_pairwise(
+                    coords,
+                    pocket_coords,
+                    pocket_charge_values,
+                    query_mask=atom_mask,
+                    pocket_mask=pocket_atom_mask,
+                )
+                interaction_feats = (
+                    efield_edges
+                    if interaction_feats is None
+                    else interaction_feats + efield_edges
+                )
+
         # Iterate over Semla layers
         for layer in self.layers:
             equis, invs, edge_out, interaction_out = layer(
@@ -1665,6 +1751,10 @@ class LigandGenerator(torch.nn.Module):
         self_cond=False,
         coord_skip_connect=True,
         split_continuous_discrete_time=False,
+        use_electric_field=False,
+        efield_cutoff=10.0,
+        efield_softening=0.5,
+        efield_num_rbf=16,
         pocket_enc=None,
         eps=1e-6,
     ):
@@ -1682,6 +1772,7 @@ class LigandGenerator(torch.nn.Module):
 
         self.d_equi = d_equi
         self.duplicate_pocket_equi = duplicate_pocket_equi
+        self.use_electric_field = use_electric_field
 
         ligand_dec = LigandDecoder(
             d_equi,
@@ -1706,6 +1797,10 @@ class LigandGenerator(torch.nn.Module):
             self_cond=self_cond,
             coord_skip_connect=coord_skip_connect,
             split_continuous_discrete_time=split_continuous_discrete_time,
+            use_electric_field=use_electric_field,
+            efield_cutoff=efield_cutoff,
+            efield_softening=efield_softening,
+            efield_num_rbf=efield_num_rbf,
             eps=eps,
         )
 
@@ -1742,6 +1837,7 @@ class LigandGenerator(torch.nn.Module):
         pocket_equis=None,
         pocket_invs=None,
         interactions=None,
+        pocket_charge_values=None,
     ):
 
         if self.pocket_enc is not None:
@@ -1769,6 +1865,7 @@ class LigandGenerator(torch.nn.Module):
             pocket_invs=pocket_invs,
             pocket_atom_mask=pocket_atom_mask,
             interactions=interactions,
+            pocket_charge_values=pocket_charge_values,
         )
 
         return decoder_out
@@ -1827,6 +1924,7 @@ class LigandGenerator(torch.nn.Module):
         pocket_invs=None,
         pocket_atom_mask=None,
         interactions=None,
+        pocket_charge_values=None,
     ):
 
         if self.pocket_enc is not None and pocket_invs is None:
@@ -1853,6 +1951,7 @@ class LigandGenerator(torch.nn.Module):
             pocket_invs=pocket_invs,
             pocket_atom_mask=pocket_atom_mask,
             interactions=interactions,
+            pocket_charge_values=pocket_charge_values,
         )
 
         return decoder_out

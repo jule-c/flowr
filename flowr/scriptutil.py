@@ -462,6 +462,56 @@ def generate_ligands_per_target(args, hparams, model, batch, save_traj=False, it
         pocket_prior = model.builder.extract_pocket_from_complex(data)
     pocket_prior["interactions"] = data["interactions"]
     pocket_prior["complex"] = data["complex"]
+    # *** OPLS4 partial charges for the electrostatic field (申请书公式(5)) ***
+    # Match per-atom partial charges from PQR files to the pocket atoms so
+    # that the electrostatic field is computed from force field charges
+    # instead of the (mostly zero) PDB formal charges of the data pipeline.
+    #   --pocket_charge_file : one PQR file (single-target runs)
+    #   --pocket_charge_dir  : <dir>/<system_id>.pqr (multi-target runs)
+    #   --export_pocket_pdbs : dump pocket PDBs (e.g. during a cheap dry pass)
+    from flowr.util.partial_charges import match_charges_to_system
+
+    charge_state = (
+        "apo"
+        if (args.arch == "pocket_flex" and hparams["pocket_noise"] == "apo")
+        else "holo"
+    )
+    system = data["complex"][0]
+    system_id = system.metadata.get("system_id") if hasattr(system, "metadata") else None
+
+    pocket_q = None
+    charge_file = getattr(args, "pocket_charge_file", None)
+    charge_dir = getattr(args, "pocket_charge_dir", None)
+    if charge_file:
+        pocket_q = match_charges_to_system(
+            charge_file, system, state=charge_state
+        )
+    elif charge_dir and system_id is not None:
+        pqr_path = Path(charge_dir) / f"{system_id}.pqr"
+        if pqr_path.exists():
+            pocket_q = match_charges_to_system(
+                str(pqr_path), system, state=charge_state, verbose=False
+            )
+        else:
+            print(
+                f"[pocket charges] {pqr_path} not found; falling back to the "
+                f"data pipeline charges for system {system_id}"
+            )
+
+    if pocket_q is not None:
+        pocket_prior["pocket_charge_values"] = pocket_q.unsqueeze(0).expand(
+            pocket_prior["coords"].size(0), -1
+        )
+
+    export_dir = getattr(args, "export_pocket_pdbs", None)
+    if export_dir and system_id is not None:
+        export_path = Path(export_dir)
+        export_path.mkdir(parents=True, exist_ok=True)
+        pdb_path = export_path / f"{system_id}.pdb"
+        if not pdb_path.exists():
+            pocket = system.apo if charge_state == "apo" else system.holo
+            pocket.orig_pocket.write_pdb(str(pdb_path), include_bonds=True)
+            print(f"[pocket charges] exported pocket PDB: {pdb_path}")
     pocket_prior = {
         k: v.cuda() if torch.is_tensor(v) else v for k, v in pocket_prior.items()
     }
@@ -518,6 +568,56 @@ def generate_n_ligands(args, hparams, model, batch, batch_idx=0):
         pocket_prior = model.builder.extract_pocket_from_complex(data)
     pocket_prior["interactions"] = data["interactions"]
     pocket_prior["complex"] = data["complex"]
+    # *** OPLS4 partial charges for the electrostatic field (申请书公式(5)) ***
+    # Match per-atom partial charges from PQR files to the pocket atoms so
+    # that the electrostatic field is computed from force field charges
+    # instead of the (mostly zero) PDB formal charges of the data pipeline.
+    #   --pocket_charge_file : one PQR file (single-target runs)
+    #   --pocket_charge_dir  : <dir>/<system_id>.pqr (multi-target runs)
+    #   --export_pocket_pdbs : dump pocket PDBs (e.g. during a cheap dry pass)
+    from flowr.util.partial_charges import match_charges_to_system
+
+    charge_state = (
+        "apo"
+        if (args.arch == "pocket_flex" and hparams["pocket_noise"] == "apo")
+        else "holo"
+    )
+    system = data["complex"][0]
+    system_id = system.metadata.get("system_id") if hasattr(system, "metadata") else None
+
+    pocket_q = None
+    charge_file = getattr(args, "pocket_charge_file", None)
+    charge_dir = getattr(args, "pocket_charge_dir", None)
+    if charge_file:
+        pocket_q = match_charges_to_system(
+            charge_file, system, state=charge_state
+        )
+    elif charge_dir and system_id is not None:
+        pqr_path = Path(charge_dir) / f"{system_id}.pqr"
+        if pqr_path.exists():
+            pocket_q = match_charges_to_system(
+                str(pqr_path), system, state=charge_state, verbose=False
+            )
+        else:
+            print(
+                f"[pocket charges] {pqr_path} not found; falling back to the "
+                f"data pipeline charges for system {system_id}"
+            )
+
+    if pocket_q is not None:
+        pocket_prior["pocket_charge_values"] = pocket_q.unsqueeze(0).expand(
+            pocket_prior["coords"].size(0), -1
+        )
+
+    export_dir = getattr(args, "export_pocket_pdbs", None)
+    if export_dir and system_id is not None:
+        export_path = Path(export_dir)
+        export_path.mkdir(parents=True, exist_ok=True)
+        pdb_path = export_path / f"{system_id}.pdb"
+        if not pdb_path.exists():
+            pocket = system.apo if charge_state == "apo" else system.holo
+            pocket.orig_pocket.write_pdb(str(pdb_path), include_bonds=True)
+            print(f"[pocket charges] exported pocket PDB: {pdb_path}")
     pocket_prior = {
         k: v.cuda() if torch.is_tensor(v) else v for k, v in pocket_prior.items()
     }
