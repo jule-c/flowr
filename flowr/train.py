@@ -84,6 +84,11 @@ DEFAULT_OPTIMAL_TRANSPORT = "equivariant"
 
 DEFAULT_CORRECTOR_ITERS = 0
 
+# Electrostatic field guidance defaults (申请书第15-16页: 生成模型)
+DEFAULT_EFIELD_CUTOFF = 10.0
+DEFAULT_EFIELD_SOFTENING = 0.5
+DEFAULT_EFIELD_DRIFT_MODE = "force"
+
 
 # bfloat16 training produced significantly worse models than full so use default 16-bit instead
 def get_precision(args):
@@ -155,8 +160,23 @@ def build_model(
             vocab_size_pocket_res=vocab_pocket_res.size if vocab_pocket_res else None,
         )
         if args.load_pretrained_ckpt:
-            egnn_gen.load_state_dict(
-                torch.load(args.load_pretrained_ckpt)["state_dict"], strict=False
+            ckpt = torch.load(args.load_pretrained_ckpt)
+            state_dict = ckpt.get("state_dict", ckpt)
+            # Released FLOWR checkpoints store the generator weights with a
+            # "gen." prefix (the LightningModule wraps the generator). Strip it
+            # so the generator actually loads the weights; without this the
+            # strict=False load silently loads nothing.
+            if all(isinstance(k, str) for k in state_dict.keys()):
+                state_dict = {
+                    (k[len("gen.") :] if k.startswith("gen.") else k): v
+                    for k, v in state_dict.items()
+                }
+            missing, unexpected = egnn_gen.load_state_dict(state_dict, strict=False)
+            print(
+                f"Loaded pretrained generator weights from "
+                f"{args.load_pretrained_ckpt} "
+                f"({len(state_dict) - len(unexpected)} tensors loaded, "
+                f"{len(missing)} missing e.g. newly initialised field modules)"
             )
     elif args.arch == "pocket":
         fixed_equi = args.pocket_fixed_equi
@@ -197,6 +217,9 @@ def build_model(
             pocket_enc=pocket_enc,
             coord_skip_connect=not args.no_coord_skip_connect,
             split_continuous_discrete_time=args.split_continuous_discrete_time,
+            use_electric_field=args.use_electric_field,
+            efield_cutoff=args.efield_cutoff,
+            efield_softening=args.efield_softening,
         )
     elif args.arch == "eqgat":
         from flowr.models.eqgat import EqgatGenerator
@@ -271,6 +294,13 @@ def build_model(
         train_strategy = "ce"
         sampling_strategy = "velocity-sample"
 
+    # VP (variance preserving) corruption of the categorical distributions
+    # (申请书第15页公式(6)): the model is still trained to predict the clean
+    # atom/bond types (ce) and sampled with the uniform discrete flow strategy.
+    elif args.categorical_strategy == "vp":
+        train_strategy = "ce"
+        sampling_strategy = "uniform-sample"
+
     else:
         raise ValueError(
             f"Interpolation '{args.categorical_strategy}' is not supported."
@@ -299,6 +329,9 @@ def build_model(
         type_mask_index=type_mask_index,
         bond_mask_index=bond_mask_index,
         dataset=args.dataset,
+        efield_guidance=args.efield_guidance,
+        efield_guidance_scale=args.efield_guidance_scale,
+        efield_drift_mode=args.efield_drift_mode,
     )
 
     CFM = LigandPocketCFM if args.arch == "pocket" else MolecularCFM
@@ -344,6 +377,13 @@ def build_model(
         mixed_uncond_inpaint=args.mixed_uncond_inpaint,
         use_t_loss_weights=args.use_t_loss_weights,
         corrector_iters=args.corrector_iters,
+        use_electric_field=args.use_electric_field,
+        efield_guidance=args.efield_guidance,
+        efield_guidance_scale=args.efield_guidance_scale,
+        efield_cutoff=args.efield_cutoff,
+        efield_softening=args.efield_softening,
+        efield_drift_mode=args.efield_drift_mode,
+        train_pocket_charge_dir=args.train_pocket_charge_dir,
         **hparams,
     )
     return fm_model
@@ -461,6 +501,10 @@ def build_dm(
         categorical_noise = "prior-sample"
     elif args.categorical_strategy == "velocity-sample":
         categorical_interpolation = "sample"
+        categorical_noise = "uniform-sample"
+    # VP (variance preserving) corruption of types and bonds (公式(6))
+    elif args.categorical_strategy == "vp":
+        categorical_interpolation = "vp"
         categorical_noise = "uniform-sample"
     else:
         raise ValueError(
@@ -943,6 +987,33 @@ if __name__ == "__main__":
         "--optimal_transport", type=str, default=DEFAULT_OPTIMAL_TRANSPORT
     )
     parser.add_argument("--corrector_iters", type=int, default=DEFAULT_CORRECTOR_ITERS)
+
+    # Electrostatic field guided diffusion (申请书第15-16页: 生成模型)
+    # Condition the denoiser on the protein electrostatic field (公式(5))
+    parser.add_argument("--use_electric_field", action="store_true")
+    # Push atoms along the protein field during sampling (F = qE drift)
+    parser.add_argument("--efield_guidance", action="store_true")
+    parser.add_argument("--efield_guidance_scale", type=float, default=0.0)
+    parser.add_argument("--efield_cutoff", type=float, default=DEFAULT_EFIELD_CUTOFF)
+    parser.add_argument(
+        "--efield_softening", type=float, default=DEFAULT_EFIELD_SOFTENING
+    )
+    parser.add_argument(
+        "--efield_drift_mode",
+        type=str,
+        default=DEFAULT_EFIELD_DRIFT_MODE,
+        choices=["force", "unit", "field"],
+        help="force: raw electrostatic force q*E (formal-charge weighted); "
+        "unit: direction of q*E; field: every atom follows the local field "
+        "direction (recommended for neutral molecules).",
+    )
+    parser.add_argument(
+        "--train_pocket_charge_dir",
+        type=str,
+        default=None,
+        help="Directory with <system_id>.pqr OPLS4 partial charges for the "
+        "training/validation systems (used when --use_electric_field is on).",
+    )
 
     parser.set_defaults(
         trial_run=False,

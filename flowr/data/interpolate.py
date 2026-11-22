@@ -12,6 +12,7 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.transform import Rotation
 
 import flowr.util.functional as smolF
+from flowr.data.vp_diffusion import vp_noisy_types
 from flowr.util.ifg import identify_functional_groups
 from flowr.util.molrepr import GeometricMol, GeometricMolBatch, SmolBatch, SmolMol
 from flowr.util.pocket import PocketComplex, ProteinPocket
@@ -625,12 +626,12 @@ class GeometricInterpolant(Interpolant):
                 f"coord interpolation '{coord_interpolation}' not supported."
             )
 
-        if type_interpolation not in ["unmask", "sample"]:
+        if type_interpolation not in ["unmask", "sample", "vp"]:
             raise ValueError(
                 f"type interpolation '{type_interpolation}' not supported."
             )
 
-        if bond_interpolation not in ["unmask", "sample"]:
+        if bond_interpolation not in ["unmask", "sample", "vp"]:
             raise ValueError(
                 f"bond interpolation '{bond_interpolation}' not supported."
             )
@@ -824,6 +825,13 @@ class GeometricInterpolant(Interpolant):
                 atomics_sample, to_mol.atomics.size(-1)
             )
 
+        # Variance preserving (VP) corruption of the one-hot type vector
+        # (申请书第15页公式(6)): x_t = sqrt(s(t)) * x_1 + sqrt(1 - s(t)) * eps.
+        # Note this ignores the categorical prior of from_mol: the VP base
+        # distribution is Gaussian noise, as described in the proposal.
+        elif self.type_interpolation == "vp":
+            atomics = vp_noisy_types(to_mol.atomics, t_disc)
+
         # Interpolate bonds using unmasking or sampling
         if self.bond_interpolation == "unmask":
             to_adj = torch.argmax(to_mol.adjacency, dim=-1)
@@ -837,6 +845,15 @@ class GeometricInterpolant(Interpolant):
             adj_sample = torch.distributions.Categorical(adj_mean).sample()
             interp_adj = smolF.one_hot_encode_tensor(
                 adj_sample, to_mol.adjacency.size(-1)
+            )
+
+        # Variance preserving (VP) corruption of the one-hot adjacency
+        # (申请书第15页公式(6)), analogous to the atom type VP interpolation.
+        elif self.bond_interpolation == "vp":
+            n_bond_classes = to_mol.adjacency.size(-1)
+            flat_adj = to_mol.adjacency.reshape(-1, n_bond_classes)
+            interp_adj = vp_noisy_types(flat_adj, t_disc).reshape(
+                from_mol.seq_length, from_mol.seq_length, n_bond_classes
             )
 
         bond_indices = torch.ones((from_mol.seq_length, from_mol.seq_length)).nonzero()

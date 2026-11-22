@@ -19,6 +19,7 @@ import flowr.util.functional as smolF
 import flowr.util.metrics as Metrics
 import flowr.util.rdkit as smolRD
 from flowr.data.data_info import GeneralInfos as DataInfos
+from flowr.models.electric_field import charges_to_values, electric_field_drift
 from flowr.models.semla import MolecularGenerator
 from flowr.util.molrepr import GeometricMol
 from flowr.util.tokeniser import Vocabulary
@@ -48,6 +49,9 @@ class Integrator:
         bond_mask_index=None,
         dataset="geom-drugs",
         eps=1e-5,
+        efield_guidance=False,
+        efield_guidance_scale=0.0,
+        efield_drift_mode="force",
     ):
 
         self._check_cat_sampling_strategy(type_strategy, type_mask_index, "type")
@@ -67,6 +71,10 @@ class Integrator:
         self.bond_mask_index = bond_mask_index
         self.dataset = dataset
         self.eps = eps
+        # Electric field guidance during sampling (申请书: 原子在蛋白质电场引导下的扩散)
+        self.efield_guidance = efield_guidance
+        self.efield_guidance_scale = efield_guidance_scale
+        self.efield_drift_mode = efield_drift_mode
 
     @property
     def hparams(self):
@@ -79,6 +87,9 @@ class Integrator:
             "corrector-sch-a": self.corrector_sch_a,
             "corrector-sch-b": self.corrector_sch_b,
             "corrector-iter-weight": self.corrector_iter_weight,
+            "integration-efield-guidance": self.efield_guidance,
+            "integration-efield-guidance-scale": self.efield_guidance_scale,
+            "integration-efield-drift-mode": self.efield_drift_mode,
         }
 
     def step(
@@ -105,6 +116,16 @@ class Integrator:
         coord_velocity += torch.randn_like(coord_velocity) * self.coord_noise_std
         coords = curr["coords"] + (step_size * coord_velocity)
         coords = coords * prior["mask"].unsqueeze(-1)
+
+        # *** Electric field guidance (申请书: 原子在蛋白质电场引导下的扩散过程) ***
+        # Push the ligand atoms along the local protein electrostatic field
+        # (drift F_i = q_i * E_i, computed by the model wrapper from 公式(5)),
+        # so that the reverse diffusion is guided by the protein field.
+        if self.efield_guidance and "electric_field_drift" in predicted:
+            coords = coords + (
+                step_size * self.efield_guidance_scale
+            ) * predicted["electric_field_drift"]
+            coords = coords * prior["mask"].unsqueeze(-1)
 
         # *** Atom type update step ***
         if self.type_strategy == "linear":
@@ -1178,6 +1199,13 @@ class LigandPocketCFM(pl.LightningModule):
         substructure_inpainting: bool = False,
         corrector_iters: int = None,
         use_t_loss_weights: bool = False,
+        use_electric_field: bool = False,
+        efield_guidance: bool = False,
+        efield_guidance_scale: float = 0.0,
+        efield_cutoff: float = 10.0,
+        efield_softening: float = 0.5,
+        efield_drift_mode: str = "force",
+        train_pocket_charge_dir: str = None,
         dataset_info: DataInfos = None,
         data_path: str = None,
         **kwargs,
@@ -1240,6 +1268,22 @@ class LigandPocketCFM(pl.LightningModule):
         self.corrector_iters = corrector_iters
         self.use_t_loss_weights = use_t_loss_weights
 
+        # *** Electrostatic field options (申请书第15-16页: 生成模型) ***
+        # use_electric_field: condition the network on the protein electrostatic
+        #   field E (公式(5)) in addition to the pocket structure C;
+        # efield_guidance: push atoms along the field during sampling (力 F = qE),
+        #   turning generation into atoms diffusing under the protein field.
+        self.use_electric_field = use_electric_field
+        self.efield_guidance = efield_guidance
+        self.efield_guidance_scale = efield_guidance_scale
+        self.efield_cutoff = efield_cutoff
+        self.efield_softening = efield_softening
+        self.efield_drift_mode = efield_drift_mode
+        # Training/validation only: directory with <system_id>.pqr OPLS4
+        # partial charges, injected per system into the pocket batch
+        self.train_pocket_charge_dir = train_pocket_charge_dir
+        self._pqr_charge_cache = {}
+
         # Anything else passed into kwargs will also be saved
         hparams = {
             "lr": lr,
@@ -1263,6 +1307,12 @@ class LigandPocketCFM(pl.LightningModule):
             "use_ema": use_ema,
             "compile_model": compile_model,
             "warm_up_steps": warm_up_steps,
+            "use_electric_field": use_electric_field,
+            "efield_guidance": efield_guidance,
+            "efield-guidance-scale": efield_guidance_scale,
+            "efield-cutoff": efield_cutoff,
+            "efield-softening": efield_softening,
+            "efield-drift-mode": efield_drift_mode,
             "data_path": data_path,
             **gen.hparams,
             **integrator.hparams,
@@ -1349,6 +1399,7 @@ class LigandPocketCFM(pl.LightningModule):
         cond_batch=None,
         pocket_equis=None,
         pocket_invs=None,
+        pocket_charge_values=None,
     ):
         """Predict molecular coordinates and atom types
 
@@ -1376,6 +1427,16 @@ class LigandPocketCFM(pl.LightningModule):
         pocket_mask = pocket_batch["mask"]
 
         interactions = batch["interactions"] if self.flow_interactions else None
+
+        # Numeric pocket charges for the electrostatic field (公式(5)). OPLS4
+        # partial charges injected via the pocket batch take precedence;
+        # falls back to converting the one-hot charge classes of the pocket
+        # batch (mostly-zero PDB formal charges).
+        if "pocket_charge_values" in pocket_batch and pocket_charge_values is None:
+            pocket_charge_values = pocket_batch["pocket_charge_values"]
+        if self.use_electric_field and pocket_charge_values is None:
+            if "charges" in pocket_batch:
+                pocket_charge_values = charges_to_values(pocket_batch["charges"])
 
         # Prepare invariant atom features
         ligand_times_cont = t[0].view(-1, 1, 1).expand(-1, coords.size(1), -1)
@@ -1426,6 +1487,7 @@ class LigandPocketCFM(pl.LightningModule):
                     if interactions is not None
                     else None
                 ),
+                pocket_charge_values=pocket_charge_values,
             )
         else:
             out = self.gen(
@@ -1447,9 +1509,46 @@ class LigandPocketCFM(pl.LightningModule):
                     if interactions is not None
                     else None
                 ),
+                pocket_charge_values=pocket_charge_values,
             )
 
         return out
+
+    def _inject_pocket_charges(self, pocket_data, data):
+        """Attach per-system OPLS4 partial charges to the pocket batch (训练/验证).
+
+        Used when `train_pocket_charge_dir` is set: for each system in the
+        batch, load <system_id>.pqr charges, match them to the pocket atoms by
+        residue/atom name and pad them into a [B, N_p] tensor. Systems without
+        a PQR file fall back to zeros (no field contribution).
+        """
+        if self.train_pocket_charge_dir is None or "complex" not in data:
+            return pocket_data
+        from flowr.util.partial_charges import match_charges_to_system
+
+        charge_dir = Path(self.train_pocket_charge_dir)
+        charges = []
+        for system in data["complex"]:
+            sid = (
+                system.metadata.get("system_id")
+                if hasattr(system, "metadata")
+                else None
+            )
+            pqr_path = charge_dir / f"{sid}.pqr" if sid is not None else None
+            if pqr_path is not None and pqr_path.exists():
+                key = str(pqr_path)
+                if key not in self._pqr_charge_cache:
+                    self._pqr_charge_cache[key] = match_charges_to_system(
+                        key, system, verbose=False
+                    )
+                charges.append(self._pqr_charge_cache[key])
+            else:
+                charges.append(torch.zeros(system.holo.seq_length))
+        pocket_q = smolF.pad_tensors(charges)
+        pocket_data["pocket_charge_values"] = pocket_q.to(
+            pocket_data["coords"].device
+        )
+        return pocket_data
 
     def training_step(self, batch, b_idx):
         # Input data
@@ -1458,6 +1557,7 @@ class LigandPocketCFM(pl.LightningModule):
         # Extract pocket data
         pocket_data = self.builder.extract_pocket_from_complex(data)
         pocket_data["interactions"] = data["interactions"]
+        pocket_data = self._inject_pocket_charges(pocket_data, data)
         # Extract ligand data
         lig_interp = self.builder.extract_ligand_from_complex(interpolated)
         lig_interp["fragment_mask"] = data["fragment_mask"]
@@ -1549,6 +1649,7 @@ class LigandPocketCFM(pl.LightningModule):
         # Extract pocket data
         pocket_data = self.builder.extract_pocket_from_complex(data)
         pocket_data["interactions"] = prior["interactions"]
+        pocket_data = self._inject_pocket_charges(pocket_data, data)
         # Extract ligand data
         lig_prior = self.builder.extract_ligand_from_complex(prior)
         lig_prior["fragment_mask"] = prior["fragment_mask"]
@@ -1649,6 +1750,7 @@ class LigandPocketCFM(pl.LightningModule):
         pocket_data = self.builder.extract_pocket_from_complex(data)
         pocket_data["interactions"] = data["interactions"]
         pocket_data["complex"] = data["complex"]
+        pocket_data = self._inject_pocket_charges(pocket_data, data)
         # Extract ligand data
         lig_prior = self.builder.extract_ligand_from_complex(prior)
         lig_prior["fragment_mask"] = prior["fragment_mask"]
@@ -2058,6 +2160,15 @@ class LigandPocketCFM(pl.LightningModule):
 
         step_sizes = [t1 - t0 for t0, t1 in zip(time_points[:-1], time_points[1:])]
         with torch.no_grad():
+            # Numeric pocket charges for the electrostatic field (公式(5)).
+            # OPLS4 partial charges injected into the pocket batch take
+            # precedence over the one-hot formal charge classes.
+            pocket_charge_values = None
+            if self.efield_guidance:
+                if "pocket_charge_values" in pocket_data:
+                    pocket_charge_values = pocket_data["pocket_charge_values"]
+                elif "charges" in pocket_data:
+                    pocket_charge_values = charges_to_values(pocket_data["charges"])
             # Generate pocket encodings only once at inference (NOTE: only for rigid SBDD)
             pocket_equis, pocket_invs = self.gen.get_pocket_encoding(
                 pocket_data["coords"],
@@ -2100,6 +2211,24 @@ class LigandPocketCFM(pl.LightningModule):
                 }
                 if self.flow_interactions:
                     predicted["interactions"] = interaction_probs
+
+                # *** Electric field guidance (申请书: 原子在蛋白质电场引导下的扩散) ***
+                # Drift of each ligand atom along the protein electrostatic field:
+                # the force F_i = q_i * E_i uses the expected charge of the atom
+                # under the predicted charge distribution and the field from 公式(5).
+                if self.efield_guidance and pocket_charge_values is not None:
+                    predicted["electric_field_drift"] = electric_field_drift(
+                        curr["coords"],
+                        charge_probs,
+                        pocket_data["coords"],
+                        pocket_charge_values,
+                        ligand_mask=prior["mask"],
+                        pocket_mask=pocket_data["mask"],
+                        mode=self.efield_drift_mode,
+                        cutoff=self.efield_cutoff,
+                        softening=self.efield_softening,
+                    )
+
                 curr = self.integrator.step(curr, predicted, prior, times, step_size)
 
                 if (
